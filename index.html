@@ -13,7 +13,7 @@ button{cursor:pointer;background:var(--card)}button.p{background:var(--ac);color
 .mu{color:var(--mu);font-size:13px}.row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)}
 .row button{width:auto;padding:2px 10px}
 nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom,0px)}
-nav button{border:0;border-radius:0;background:none;font-size:15px;padding:18px 2px;min-height:60px}nav button.on{color:var(--ac);font-weight:700}
+nav button{border:0;border-radius:0;background:none;font-size:14px;padding:18px 0;min-height:60px}nav button.on{color:var(--ac);font-weight:700}
 textarea{min-height:80px}.big{padding:16px 6px;font-size:15px}
 table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:5px;border-bottom:1px solid var(--bd);text-align:right}td:first-child,th:first-child{text-align:left}
 </style></head><body><main id="v"></main>
@@ -43,9 +43,9 @@ const dayP=d=>{const a=[];for(let h=0;h<24;h++){const w=hr(d,h);if(w)a.push(w[1]
 const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
 
 /* views */
-function nav(){$('#nav').innerHTML=[['home','ホーム'],['am','朝'],['pm','夜'],['hist','履歴'],['ana','分析'],['set','設定']].map(([k,l])=>`<button class="${tab===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}
+function nav(){$('#nav').innerHTML=[['home','ホーム'],['am','朝'],['pm','夜'],['hist','履歴'],['wx','気象'],['ana','分析'],['set','設定']].map(([k,l])=>`<button class="${tab===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}
 function go(k){tab=k;sheet=null;draw()}
-function draw(){nav();const f={home,am:()=>daily('am'),pm:()=>daily('pm'),hist,ana,set}[tab];$('#v').innerHTML=f();window.scrollTo(0,0)}
+function draw(){nav();const f={home,am:()=>daily('am'),pm:()=>daily('pm'),hist,wx:wview,ana,set}[tab];$('#v').innerHTML=f();window.scrollTo(0,0)}
 const evsOf=d=>mem.events.filter(e=>e.date===d).sort((a,b)=>a.time<b.time?-1:1);
 function home(){const d=today();
 let h=`<h2>${d} の記録</h2><div class="g3">${Object.keys(T).map(k=>`<button class="big" onclick="openSheet('${k}')">${T[k].n}</button>`).join('')}</div>`;
@@ -80,6 +80,16 @@ return `<div class="card"><b>${d}</b><div class="mu">${sh!=null?`睡眠 ${x.slee
 <div class="mu">${x.bath?'入浴'+x.bath+' ':''}${x.dinner?'夕食'+x.dinner+' ':''}${x.overtime!=null&&x.overtime!==''?'残業'+x.overtime+'h':''}</div>
 ${p.length?`<div class="mu">気圧 平均${avg(p).toFixed(0)}hPa(${Math.min(...p).toFixed(0)}〜${Math.max(...p).toFixed(0)}) ${hr(d,12)?WC(hr(d,12)[2]):''}</div>`:''}
 ${evsOf(d).map(e=>`<div>${e.time} ${T[e.type].n} ${esc(desc(e))}</div>`).join('')}${x.memo?`<div style="margin-top:6px;white-space:pre-wrap">📝 ${esc(x.memo)}</div>`:''}</div>`}).join('')||'<div class="mu">記録がありません</div>')}
+let WD=null,bkMsg='';
+function wview(){WD=WD||today();const t=[];for(let h=0;h<24;h++){const x=hr(WD,h);if(x)t.push([h,x])}
+let o=`<h2>気象の履歴</h2><div class="card"><div style="display:grid;grid-template-columns:56px 1fr 56px;gap:8px"><button onclick="WD=addDay(WD,-1);draw()">◀</button><input type="date" value="${WD}" onchange="WD=this.value;draw()"><button onclick="WD=addDay(WD,1);draw()">▶</button></div></div>`;
+if(!t.length){const ks=Object.keys(mem.weather).sort();return o+`<div class="card mu">この日の気象データがありません。${ks.length?'取得済み: '+ks[0].slice(0,10)+' 〜 '+ks[ks.length-1].slice(0,10):'設定画面で居住市を保存すると取得されます。'}</div>`}
+const tp=t.map(([h,x])=>x[0]).filter(v=>v!=null),pv=t.map(([h,x])=>x[1]),mn=Math.min(...pv)-1,mx=Math.max(...pv)+1;
+const X=h=>34+h*(300/23),Y=v=>10+(mx-v)/(mx-mn)*100,f=(v,d=1)=>v==null?'-':v.toFixed(d);
+o+=`<div class="card"><b>0・6・12・18時</b><table><tr><th>時刻</th><th>気温℃</th><th>気圧hPa</th><th>天気</th></tr>${[0,6,12,18].map(h=>{const x=hr(WD,h);return `<tr><td>${h}時</td><td>${x?f(x[0]):'-'}</td><td>${x?f(x[1],0):'-'}</td><td>${x?WC(x[2]):'-'}</td></tr>`}).join('')}</table>
+<div class="mu" style="margin-top:6px">気温 最高${f(Math.max(...tp))} / 最低${f(Math.min(...tp))}℃　気圧 最高${f(Math.max(...pv),0)} / 最低${f(Math.min(...pv),0)}hPa</div></div>
+<div class="card"><b>気圧の推移(hPa)</b><svg viewBox="0 0 340 140" style="width:100%"><g stroke="var(--bd)">${[0,6,12,18].map(h=>`<line x1="${X(h)}" x2="${X(h)}" y1="10" y2="110"/>`).join('')}</g><polyline fill="none" stroke="var(--ac)" stroke-width="2" points="${t.map(([h,x])=>X(h).toFixed(1)+','+Y(x[1]).toFixed(1)).join(' ')}"/><g fill="var(--mu)" font-size="11" text-anchor="middle">${[0,6,12,18].map(h=>`<text x="${X(h)}" y="128">${h}時</text>`).join('')}</g><text x="0" y="18" font-size="11" fill="var(--mu)">${mx.toFixed(0)}</text><text x="0" y="112" font-size="11" fill="var(--mu)">${mn.toFixed(0)}</text></svg></div>
+<div class="card"><details><summary>1時間ごとの一覧</summary><table><tr><th>時刻</th><th>気温℃</th><th>気圧hPa</th><th>天気</th></tr>${t.map(([h,x])=>`<tr><td>${h}時</td><td>${f(x[0])}</td><td>${f(x[1],1)}</td><td>${WC(x[2])}</td></tr>`).join('')}</table></details></div>`;return o}
 function pearson(a,b){const n=a.length;if(n<5)return null;const ma=avg(a),mb=avg(b);let s=0,x=0,y=0;for(let i=0;i<n;i++){s+=(a[i]-ma)*(b[i]-mb);x+=(a[i]-ma)**2;y+=(b[i]-mb)**2}return x&&y?s/Math.sqrt(x*y):null}
 function rows(){const ds=[...new Set([...Object.keys(mem.daily),...mem.events.map(e=>e.date)])].sort();
 return ds.map(d=>{const x=mem.daily[d]||{},ev=evsOf(d),p=dayP(d),pp=dayP(addDay(d,-1));let c6=null;
@@ -94,7 +104,8 @@ return `<h2>相関分析</h2><div class="card"><div class="mu">対象日数: ${R
 <div class="card"><b>頭痛が強かった日のメモ</b>${R.filter(r=>r.head>=5&&mem.daily[r.d]?.memo).sort((a,b)=>b.head-a.head).slice(0,10).map(r=>`<div class="row"><span>${r.d}(程度${r.head}) ${esc(mem.daily[r.d].memo)}</span></div>`).join('')||'<div class="mu">該当なし</div>'}</div>`}
 function set(){const s=mem.settings;return `<h2>設定</h2><div class="card"><label>居住市(例: 横浜)</label><input id="s_city" value="${esc(s.city||'')}"><label>よく飲む薬(1行に1つ)</label><textarea id="s_meds">${esc(s.meds.join('\n'))}</textarea>
 <button class="p" style="margin-top:10px" onclick="saveSet()">保存して気象データを更新</button><div class="mu" id="s_msg">${esc(wxMsg||(s.city?'設定中: '+s.city:''))}</div></div>
-<div class="card"><b>CSV出力</b><div class="g" style="margin-top:8px"><button onclick="csv('d')">日別サマリー</button><button onclick="csv('h')">1時間ごと気象</button></div><textarea id="csvbox" readonly style="margin-top:8px;min-height:120px" placeholder="ここにCSVが表示されます"></textarea><button onclick="cp()">コピー</button></div>
+<div class="card"><b>バックアップと復元</b><div class="mu">全データ(記録・気象・設定)を1つのCSVに書き出し、あとで読み込んで復元できます。</div><button class="p" style="margin-top:8px" onclick="dl()">バックアップCSVを保存</button><label>復元するCSVファイル</label><input type="file" accept=".csv,text/csv,text/plain" onchange="pick(this)"><label>または、CSVの内容を貼り付け</label><textarea id="rsbox" style="min-height:70px"></textarea><button style="margin-top:8px" onclick="rs()">復元(既存データに追加・上書き)</button><div class="mu" id="bk_msg">${esc(bkMsg)}</div></div>
+<div class="card"><b>分析用CSV出力</b><div class="g" style="margin-top:8px"><button onclick="csv('d')">日別サマリー</button><button onclick="csv('h')">1時間ごと気象</button></div><textarea id="csvbox" readonly style="margin-top:8px;min-height:120px" placeholder="ここにCSVが表示されます"></textarea><button onclick="cp()">コピー</button></div>
 <div class="card"><b>表示</b><div class="g" style="margin-top:8px"><button onclick="document.documentElement.dataset.theme='light'">ライト</button><button onclick="document.documentElement.dataset.theme='dark'">ダーク</button></div></div>`}
 async function saveSet(){const s=mem.settings,c=$('#s_city').value.trim();s.meds=$('#s_meds').value.split('\n').map(x=>x.trim()).filter(Boolean);
 if(c&&c!==s.city){try{const r=await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(c)+'&count=1&language=ja'),j=await r.json();if(j.results&&j.results[0]){s.city=c;s.lat=j.results[0].latitude;s.lon=j.results[0].longitude}else{wxMsg='市が見つかりませんでした'}}catch(e){s.city=c;wxMsg='市の座標を取得できませんでした(通信できない環境の可能性があります)'}}
@@ -105,6 +116,26 @@ else{o=[['日付','入眠','起床','睡眠時間h','中途覚醒','寝起き気
 rows().forEach(r=>{const x=mem.daily[r.d]||{},ev=evsOf(r.d),p=dayP(r.d),w=h=>hr(r.d,h);
 o.push([r.d,x.sleepAt,x.wakeAt,sleepH(x)?.toFixed(2),x.awake==='1'?'あり':x.awake==='0'?'なし':'',x.mood,x.bath,x.dinner,x.overtime,r.head,r.sleepy,r.f['運動(分)'],r.f['昼寝(分)'],ev.filter(e=>e.type==='temp').map(e=>e.time+' '+e.val).join(' / '),...[0,6,12,18].map(h=>w(h)?.[0]),...[0,6,12,18].map(h=>w(h)?.[1]),p.length?Math.max(...p):'',p.length?Math.min(...p):'',w(12)?WC(w(12)[2]):'',ev.map(e=>e.time+' '+T[e.type].n+' '+desc(e)).join(' / '),x.memo])})}
 $('#csvbox').value=o.map(r=>r.map(q).join(',')).join('\n')}
+function bk(){const s=mem.settings,o=[['kind','f1','f2','f3','f4','f5','f6','f7','f8','f9'],['setting',s.city||'',s.lat??'',s.lon??'',(s.meds||[]).join('|')]];
+Object.keys(mem.daily).sort().forEach(d=>{const x=mem.daily[d];o.push(['daily',d,x.sleepAt,x.wakeAt,x.awake,x.mood,x.bath,x.dinner,x.overtime,x.memo])});
+mem.events.forEach(e=>o.push(['event',e.id,e.date,e.time,e.type,e.level,e.dur,e.name,e.min,e.val]));
+Object.keys(mem.weather).sort().forEach(k=>o.push(['weather',k,...mem.weather[k]]));
+return o.map(r=>r.map(q).join(',')).join('\n')}
+function dl(){const t=bk();$('#csvbox').value=t;try{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+t],{type:'text/csv'}));a.download='health-backup-'+today()+'.csv';document.body.appendChild(a);a.click();a.remove()}catch(e){}
+$('#bk_msg').textContent='保存を実行しました。保存されない場合は、下のCSV枠の内容をコピーしてメモ等に貼り付けてください'}
+function parseCSV(t){t=t.replace(/^\ufeff/,'');const R=[];let r=[],c='',iq=false;for(let i=0;i<t.length;i++){const ch=t[i];if(iq){if(ch=='"'){if(t[i+1]=='"'){c+='"';i++}else iq=false}else c+=ch}else if(ch=='"')iq=true;else if(ch==','){r.push(c);c=''}else if(ch=='\n'||ch=='\r'){if(ch=='\r'&&t[i+1]=='\n')i++;r.push(c);R.push(r);r=[];c=''}else c+=ch}
+if(c!==''||r.length){r.push(c);R.push(r)}return R}
+const nv=v=>v===''||v==null?null:+v;
+function pick(i){const f=i.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('#rsbox').value=r.result;$('#bk_msg').textContent='読み込みました。「復元」をタップしてください'};r.readAsText(f)}
+async function rs(){const R=parseCSV($('#rsbox').value),n={daily:0,event:0,weather:0},s=mem.settings,ids=new Set(mem.events.map(e=>String(e.id)));
+if(!R.some(r=>['daily','event','weather','setting'].includes(r[0]))){$('#bk_msg').textContent='復元できるデータが見つかりません(バックアップCSVを指定してください)';return}
+R.forEach(r=>{const k=r[0];
+if(k==='setting'){if(r[1])s.city=r[1];if(r[2]!=='')s.lat=+r[2];if(r[3]!=='')s.lon=+r[3];if(r[4])s.meds=r[4].split('|').filter(Boolean)}
+else if(k==='daily'&&r[1]){mem.daily[r[1]]={sleepAt:r[2],wakeAt:r[3],awake:r[4],mood:r[5],bath:r[6],dinner:r[7],overtime:nv(r[8]),memo:r[9]};n.daily++}
+else if(k==='event'&&r[1]&&!ids.has(r[1])){mem.events.push({id:+r[1],date:r[2],time:r[3],type:r[4],level:nv(r[5]),dur:nv(r[6]),name:r[7],min:nv(r[8]),val:nv(r[9])});ids.add(r[1]);n.event++}
+else if(k==='weather'&&(r[1]||'').includes('T')){mem.weather[r[1]]=[nv(r[2]),nv(r[3]),nv(r[4])];n.weather++}});
+for(const k of ['daily','events','weather','settings'])await save(k);
+bkMsg=`復元しました(日別${n.daily}件、随時記録${n.event}件、気象${n.weather}件)`;draw()}
 async function cp(){const b=$('#csvbox');b.select();try{await navigator.clipboard.writeText(b.value)}catch(e){document.execCommand('copy')}}
 (async()=>{await ld();for(const k of Object.keys(mem)){const v=await kv(k);if(v)mem[k]=v}mem.settings.meds=mem.settings.meds||[];draw();if(mem.settings.lat){await wx();if(tab==='set')draw()}})();
 </script></body></html>
