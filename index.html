@@ -17,6 +17,8 @@ nav button{border:0;border-radius:0;background:none;font-size:14px;padding:18px 
 textarea{min-height:80px}.big{padding:16px 6px;font-size:15px}
 table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:5px;border-bottom:1px solid var(--bd);text-align:right}td:first-child,th:first-child{text-align:left}
 .seg{display:flex;gap:6px}.seg label{flex:1;margin:0;font-size:inherit;color:inherit}.seg input{position:absolute;opacity:0;width:0;height:0}.seg span{display:block;text-align:center;padding:10px 0;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font-size:15px;cursor:pointer}.seg input:checked+span{background:var(--ac);color:#fff;border-color:var(--ac)}.seg label{position:relative}
+.fc{font-size:11px;color:var(--ac);border:1px solid var(--ac);border-radius:4px;padding:0 3px;margin-left:4px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}.cal button{display:flex;flex-direction:column;align-items:center;gap:1px;padding:3px 0;min-height:66px;font-size:12px}.cal button.sel{border:2px solid var(--ac)}.cal button.td span:first-child{color:var(--ac);font-weight:700}
 </style></head><body><main id="v"></main>
 <nav id="nav"></nav>
 <script>
@@ -37,10 +39,13 @@ const WC=c=>c==null?'':c==0?'快晴':c<=3?'晴れ〜曇り':c<=48?'霧':c<=57?'�
 
 /* weather */
 async function wx(){const s=mem.settings;if(!s.lat){wxMsg='居住市が未設定です';return}
-try{const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lon}&hourly=temperature_2m,surface_pressure,weather_code&past_days=7&forecast_days=1&timezone=auto`);const j=await r.json(),h=j.hourly;
-h.time.forEach((t,i)=>{if(h.surface_pressure[i]!=null)mem.weather[t]=[h.temperature_2m[i],h.surface_pressure[i],h.weather_code[i]]});await save('weather');wxMsg='気象データを更新しました('+h.time.length+'件)'}catch(e){wxMsg='気象データを取得できませんでした(通信できない環境の可能性があります)'}}
+try{const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lon}&hourly=temperature_2m,surface_pressure,weather_code,precipitation_probability&past_days=7&forecast_days=7&timezone=auto`);const j=await r.json(),h=j.hourly;
+h.time.forEach((t,i)=>{if(h.surface_pressure[i]!=null)mem.weather[t]=[h.temperature_2m[i],h.surface_pressure[i],h.weather_code[i],isFc(t)?(h.precipitation_probability?.[i]??null):null]});await save('weather');wxMsg='気象データを更新しました('+h.time.length+'件)'}catch(e){wxMsg='気象データを取得できませんでした(通信できない環境の可能性があります)'}}
 const hr=(d,h)=>mem.weather[d+'T'+pad(h)+':00'];
-const dayP=d=>{const a=[];for(let h=0;h<24;h++){const w=hr(d,h);if(w)a.push(w[1])}return a};
+const nowK=()=>{const d=new Date();return dstr(d)+'T'+pad(d.getHours())+':00'};
+const isFc=k=>k>nowK(),isFcH=(d,h)=>isFc(d+'T'+pad(h)+':00');
+const hrA=(d,h)=>isFcH(d,h)?undefined:hr(d,h);
+const dayP=d=>{const a=[];for(let h=0;h<24;h++){const w=hrA(d,h);if(w)a.push(w[1])}return a};
 const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
 
 /* views */
@@ -114,18 +119,30 @@ for(let i=h-w;i<h;i++)if(i>=0)cov[i]=Math.max(cov[i],lv)}
 const s=[];for(let i=0;i<24;i++){const lv=cov[i];if(!lv)continue;const l=s[s.length-1];if(l&&l.lv===lv&&l.e===i)l.e=i+1;else s.push({s:i,e:i+1,lv})}
 return s}
 
-function hist(){const ds=[...new Set([...Object.keys(mem.daily),...mem.events.map(e=>e.date)])].sort().reverse();
-return '<h2>日別の履歴</h2>'+(ds.map(d=>{const x=mem.daily[d]||{},sh=sleepH(x),p=dayP(d);
-return `<div class="card"><b>${d}</b><div class="mu">${sh!=null?`睡眠 ${x.sleepAt}→${x.wakeAt}(${sh.toFixed(1)}h) `:''}${x.awake?'中途覚醒'+(x.awake==='1'?'あり':'なし')+' ':''}${x.mood?'寝起き'+x.mood+' ':''}${x.dayMood?'気分'+x.dayMood+' ':''}${x.appetite?'食欲'+x.appetite:''}</div>
+let HM=null,HS=null;
+const mFace=l=>{const c=['','#7f8fd6','#9fc0e8','#cfe3b0','#ffe27a','#ffc23d'][l],mo=['','M-4,5Q0,.5 4,5','M-4,4Q0,2 4,4','M-4,3.5H4','M-4,2.5Q0,5.5 4,2.5','M-5,2Q0,9.5 5,2'][l];
+return `<svg viewBox="-10 -10 20 20" width="26" height="26"><circle r="9" fill="${c}" stroke="#5c4400" stroke-width=".8"/><circle cx="-3" cy="-2" r="1.2" fill="#3a2a00"/><circle cx="3" cy="-2" r="1.2" fill="#3a2a00"/><path d="${mo}" stroke="#3a2a00" stroke-width="1.1" fill="none" stroke-linecap="round"/></svg>`};
+const HC=['','#fcc2c2','#f59a9a','#ee6e6e','#e03131','#a61e1e'];
+const marks=(hl,md)=>`<svg viewBox="0 0 34 10" width="34" height="10">${hl?`<circle cx="8" cy="5" r="4" fill="${HC[hl]}" stroke="#a61e1e" stroke-width=".7"/>`:''}${md?`<g transform="translate(25,5) scale(.7)">${capsule(0,0,'服薬')}</g>`:''}</svg>`;
+const selDay=d=>{HS=d;$('#v').innerHTML=hist();document.getElementById('hd')?.scrollIntoView({behavior:'smooth',block:'nearest'})};
+const moveM=n=>{const [y,mo]=HM.split('-').map(Number),d=new Date(y,mo-1+n,1);HM=d.getFullYear()+'-'+pad(d.getMonth()+1);HS=null;$('#v').innerHTML=hist()};
+function histCard(d){const x=mem.daily[d]||{},sh=sleepH(x),p=dayP(d),ev=evsOf(d);
+if(!Object.keys(x).length&&!ev.length)return `<div class="card" id="hd"><b>${d}</b><div class="mu">記録がありません</div></div>`;
+return `<div class="card" id="hd"><b>${d}</b><div class="mu">${sh!=null?`睡眠 ${x.sleepAt}→${x.wakeAt}(${sh.toFixed(1)}h) `:''}${x.awake?'中途覚醒'+(x.awake==='1'?'あり':'なし')+' ':''}${x.mood?'寝起き'+x.mood+' ':''}${x.dayMood?'気分'+x.dayMood+' ':''}${x.appetite?'食欲'+x.appetite:''}</div>
 <div class="mu">${x.bath?'入浴'+x.bath+' ':''}${x.dinner?'夕食'+x.dinner+' ':''}${x.overtime!=null&&x.overtime!==''?'残業'+x.overtime+'h':''}</div>
-${p.length?`<div class="mu">気圧 平均${avg(p).toFixed(0)}hPa(${Math.min(...p).toFixed(0)}〜${Math.max(...p).toFixed(0)}) ${hr(d,12)?WC(hr(d,12)[2]):''}</div>`:''}
-${evsOf(d).map(e=>`<div>${e.time} ${T[e.type].n} ${esc(desc(e))}</div>`).join('')}${x.memo?`<div style="margin-top:6px;white-space:pre-wrap">📝 ${esc(x.memo)}</div>`:''}</div>`}).join('')||'<div class="mu">記録がありません</div>')}
+${p.length?`<div class="mu">気圧 平均${avg(p).toFixed(0)}hPa(${Math.min(...p).toFixed(0)}〜${Math.max(...p).toFixed(0)}) ${hrA(d,12)?WC(hrA(d,12)[2]):''}</div>`:''}
+${ev.map(e=>`<div>${e.time} ${T[e.type].n} ${esc(desc(e))}</div>`).join('')}${x.memo?`<div style="margin-top:6px;white-space:pre-wrap">📝 ${esc(x.memo)}</div>`:''}</div>`}
+function hist(){const t=today();HM=HM||t.slice(0,7);const [y,mo]=HM.split('-').map(Number),s0=new Date(y,mo-1,1).getDay(),nd=new Date(y,mo,0).getDate();
+let c=['日','月','火','水','木','金','土'].map(w=>`<div class="mu" style="text-align:center">${w}</div>`).join('')+'<div></div>'.repeat(s0);
+for(let i=1;i<=nd;i++){const d=HM+'-'+pad(i),x=mem.daily[d]||{},ev=evsOf(d),hl=Math.max(0,...ev.filter(e=>e.type==='headache').map(e=>e.level||0)),md=ev.some(e=>e.type==='med'),ml=+x.dayMood||0;
+c+=`<button class="cd${HS===d?' sel':''}${d===t?' td':''}" onclick="selDay('${d}')"><span>${i}</span>${ml?mFace(ml):'<span style="height:26px"></span>'}${hl||md?marks(hl,md):'<span style="height:10px"></span>'}</button>`}
+return `<h2>日別の履歴</h2><div class="card"><div style="display:grid;grid-template-columns:56px 1fr 56px;gap:8px;align-items:center"><button onclick="moveM(-1)">◀</button><b style="text-align:center">${y}年${mo}月</b><button onclick="moveM(1)">▶</button></div><div class="cal" style="margin-top:8px">${c}</div><div class="mu" style="margin-top:6px">顔=1日の気分(青:悪い〜橙:良い)　●=頭痛(濃いほど強い)　カプセル=服薬</div></div>`+(HS?histCard(HS):'<div class="mu">日をタップすると詳細が表示されます</div>')}
 let WD=null,bkMsg='';
 function wview(){WD=WD||today();const t=[];for(let h=0;h<24;h++){const x=hr(WD,h);if(x)t.push([h,x])}
 let o=`<h2>気象の履歴</h2><div class="card"><div style="display:grid;grid-template-columns:56px 1fr 56px;gap:8px"><button onclick="WD=addDay(WD,-1);draw()">◀</button><input type="date" value="${WD}" onchange="WD=this.value;draw()"><button onclick="WD=addDay(WD,1);draw()">▶</button></div></div>`;
 if(!t.length){const ks=Object.keys(mem.weather).sort();return o+`<div class="card mu">この日の気象データがありません。${ks.length?'取得済み: '+ks[0].slice(0,10)+' 〜 '+ks[ks.length-1].slice(0,10):'設定画面で居住市を保存すると取得されます。'}</div>`}
 const tp=t.map(([h,x])=>x[0]).filter(v=>v!=null),pv=t.map(([h,x])=>x[1]),mn=Math.min(...pv)-1,mx=Math.max(...pv)+1;
-const X=h=>40+h*12,Y=v=>10+(mx-v)/(mx-mn)*100,f=(v,d=1)=>v==null?'-':v.toFixed(d);
+const wcell=x=>x?WC(x[2])+(x[3]!=null?` 降水${x[3]}%`:''):'-';const fl=h=>isFcH(WD,h)?'<span class="fc">予報</span>':'';const X=h=>40+h*12,Y=v=>10+(mx-v)/(mx-mn)*100,f=(v,d=1)=>v==null?'-':v.toFixed(d);
 const segs=warnBands(WD),COL=['','rgba(255,193,7,.30)','rgba(224,49,49,.28)'],NM=['','注意','警告'],[t3,t6]=thr();
 const tm=e=>{const a=m(e.time);return a==null?null:a/60};
 const evs=evsOf(WD),hd=evs.filter(e=>e.type==='headache'&&e.level!=null),md=evs.filter(e=>e.type==='med'),both=evs.filter(e=>e.type==='headache'||e.type==='med');
@@ -133,18 +150,18 @@ const bands=segs.map(s=>`<rect x="${X(s.s)}" y="10" width="${X(s.e)-X(s.s)}" hei
 const hIc=hd.map(e=>{const h=tm(e);return h==null?'':face(X(h),148,e.level,`${e.time} 頭痛 程度${e.level}`)}).join('');
 const mIc=md.map(e=>{const h=tm(e);return h==null?'':capsule(X(h),176,`${e.time} ${e.name||'服薬'}`)}).join('');
 const sw=c=>`<span style="display:inline-block;width:12px;height:12px;background:${c};border:1px solid var(--bd);vertical-align:-2px"></span>`;
-o+=`<div class="card"><b>0・6・12・18時</b><table><tr><th>時刻</th><th>気温℃</th><th>気圧hPa</th><th>天気</th></tr>${[0,6,12,18].map(h=>{const x=hr(WD,h);return `<tr><td>${h}時</td><td>${x?f(x[0]):'-'}</td><td>${x?f(x[1],0):'-'}</td><td>${x?WC(x[2]):'-'}</td></tr>`}).join('')}</table>
+o+=`<div class="card"><b>0・6・12・18時</b>${t.some(([h])=>isFcH(WD,h))?'<div class="mu">「予報」は予報値です。その時刻になると実績値に更新されます</div>':''}<table><tr><th>時刻</th><th>気温℃</th><th>気圧hPa</th><th>天気</th></tr>${[0,6,12,18].map(h=>{const x=hr(WD,h);return `<tr><td>${h}時${fl(h)}</td><td>${x?f(x[0]):'-'}</td><td>${x?f(x[1],0):'-'}</td><td>${wcell(x)}</td></tr>`}).join('')}</table>
 <div class="mu" style="margin-top:6px">気温 最高${f(Math.max(...tp))} / 最低${f(Math.min(...tp))}℃　気圧 最高${f(Math.max(...pv),0)} / 最低${f(Math.min(...pv),0)}hPa</div></div>
-<div class="card"><b>気圧の推移(hPa)と頭痛・服薬</b><svg viewBox="0 0 340 196" style="width:100%">${bands}<g stroke="var(--bd)">${[0,6,12,18].map(h=>`<line x1="${X(h)}" x2="${X(h)}" y1="10" y2="110"/>`).join('')}<line x1="40" x2="328" y1="148" y2="148" stroke-dasharray="2 3"/><line x1="40" x2="328" y1="176" y2="176" stroke-dasharray="2 3"/></g><polyline fill="none" stroke="var(--ac)" stroke-width="2" points="${t.map(([h,x])=>X(h).toFixed(1)+','+Y(x[1]).toFixed(1)).join(' ')}"/><g fill="var(--mu)" font-size="11" text-anchor="middle">${[0,6,12,18].map(h=>`<text x="${X(h)}" y="126">${h}時</text>`).join('')}</g><text x="0" y="18" font-size="11" fill="var(--mu)">${mx.toFixed(0)}</text><text x="0" y="112" font-size="11" fill="var(--mu)">${mn.toFixed(0)}</text><text x="0" y="152" font-size="10" fill="var(--mu)">頭痛</text><text x="0" y="180" font-size="10" fill="var(--mu)">服薬</text>${hIc}${mIc}</svg>
+<div class="card"><b>気圧の推移(hPa)と頭痛・服薬</b><svg viewBox="0 0 340 196" style="width:100%">${bands}<g stroke="var(--bd)">${[0,6,12,18].map(h=>`<line x1="${X(h)}" x2="${X(h)}" y1="10" y2="110"/>`).join('')}<line x1="40" x2="328" y1="148" y2="148" stroke-dasharray="2 3"/><line x1="40" x2="328" y1="176" y2="176" stroke-dasharray="2 3"/></g>${(()=>{const pt=a=>a.map(([h,x])=>X(h).toFixed(1)+','+Y(x[1]).toFixed(1)).join(' '),ac=t.filter(([h])=>!isFcH(WD,h)),k=t.findIndex(([h])=>isFcH(WD,h)),fc=k<0?[]:t.slice(Math.max(k-1,0));return (ac.length>1?`<polyline fill="none" stroke="var(--ac)" stroke-width="2" points="${pt(ac)}"/>`:'')+(fc.length>1?`<polyline fill="none" stroke="var(--ac)" stroke-width="2" stroke-dasharray="4 3" points="${pt(fc)}"/>`:'')})()}<g fill="var(--mu)" font-size="11" text-anchor="middle">${[0,6,12,18].map(h=>`<text x="${X(h)}" y="126">${h}時</text>`).join('')}</g><text x="0" y="18" font-size="11" fill="var(--mu)">${mx.toFixed(0)}</text><text x="0" y="112" font-size="11" fill="var(--mu)">${mn.toFixed(0)}</text><text x="0" y="152" font-size="10" fill="var(--mu)">頭痛</text><text x="0" y="180" font-size="10" fill="var(--mu)">服薬</text>${hIc}${mIc}</svg>
 <div class="mu">${sw('rgba(255,193,7,.45)')} 注意(3時間で${t3}hPa以上の上昇・下降)　${sw('rgba(224,49,49,.45)')} 警告(6時間で${t6}hPa以上の上昇・下降)</div>
 <div style="margin-top:6px">${segs.length?segs.map(s=>`${NM[s.lv]} ${s.s}〜${s.e}時`).join(' / '):'<span class="mu">基準を超える気圧の変化はありません</span>'}</div></div>
 <div class="card"><b>この日の頭痛・服薬</b>${both.map(e=>`<div class="row"><span>${e.time} ${T[e.type].n} ${esc(desc(e))}</span></div>`).join('')||'<div class="mu">記録はありません</div>'}</div>
-<div class="card"><details><summary>1時間ごとの一覧</summary><table><tr><th>時刻</th><th>気温℃</th><th>気圧hPa</th><th>天気</th></tr>${t.map(([h,x])=>`<tr><td>${h}時</td><td>${f(x[0])}</td><td>${f(x[1],1)}</td><td>${WC(x[2])}</td></tr>`).join('')}</table></details></div>`;return o}
+<div class="card"><details><summary>1時間ごとの一覧</summary><table><tr><th>時刻</th><th>気温℃</th><th>気圧hPa</th><th>天気</th></tr>${t.map(([h,x])=>`<tr><td>${h}時${fl(h)}</td><td>${f(x[0])}</td><td>${f(x[1],1)}</td><td>${wcell(x)}</td></tr>`).join('')}</table></details></div>`;return o}
 
 function pearson(a,b){const n=a.length;if(n<5)return null;const ma=avg(a),mb=avg(b);let s=0,x=0,y=0;for(let i=0;i<n;i++){s+=(a[i]-ma)*(b[i]-mb);x+=(a[i]-ma)**2;y+=(b[i]-mb)**2}return x&&y?s/Math.sqrt(x*y):null}
 function rows(){const ds=[...new Set([...Object.keys(mem.daily),...mem.events.map(e=>e.date)])].sort();
 return ds.map(d=>{const x=mem.daily[d]||{},ev=evsOf(d),p=dayP(d),pp=dayP(addDay(d,-1));let c6=null;
-for(let h=6;h<24;h++){const a=hr(d,h),b=hr(d,h-6);if(a&&b){const v=Math.abs(a[1]-b[1]);if(c6==null||v>c6)c6=v}}
+for(let h=6;h<24;h++){const a=hrA(d,h),b=hrA(d,h-6);if(a&&b){const v=Math.abs(a[1]-b[1]);if(c6==null||v>c6)c6=v}}
 const mx=t=>Math.max(0,...ev.filter(e=>e.type===t).map(e=>e.level||0));
 return{d,head:mx('headache'),sleepy:mx('sleepy'),
 f:{'平均気圧':avg(p),'気圧の日内幅':p.length?Math.max(...p)-Math.min(...p):null,'前日比(平均気圧)':p.length&&pp.length?avg(p)-avg(pp):null,'6時間変化の最大':c6,'睡眠時間':sleepH(x),'中途覚醒(あり=1)':x.awake===''||x.awake==null?null:+x.awake,'寝起きの気分':x.mood?+x.mood:null,'1日の気分':x.dayMood?+x.dayMood:null,'食欲':x.appetite?+x.appetite:null,'運動(分)':ev.filter(e=>e.type==='exercise').reduce((s,e)=>s+(e.min||0),0),'残業(h)':x.overtime===''||x.overtime==null?null:x.overtime,'昼寝(分)':ev.filter(e=>e.type==='nap').reduce((s,e)=>s+(e.min||0),0)}}})}
@@ -162,15 +179,15 @@ async function saveSet(){const s=mem.settings,c=$('#s_city').value.trim();const 
 if(c&&c!==s.city){try{const r=await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(c)+'&count=1&language=ja'),j=await r.json();if(j.results&&j.results[0]){s.city=c;s.lat=j.results[0].latitude;s.lon=j.results[0].longitude}else{wxMsg='市が見つかりませんでした'}}catch(e){s.city=c;wxMsg='市の座標を取得できませんでした(通信できない環境の可能性があります)'}}
 await save('settings');if(s.lat)await wx();draw()}
 const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
-function csv(t){let o;if(t==='h'){o=[['日時','気温','気圧','天気']].concat(Object.keys(mem.weather).sort().map(k=>[k,...mem.weather[k].slice(0,2),WC(mem.weather[k][2])]))}
+function csv(t){let o;if(t==='h'){o=[['日時','気温','気圧','天気']].concat(Object.keys(mem.weather).sort().filter(k=>!isFc(k)).map(k=>[k,...mem.weather[k].slice(0,2),WC(mem.weather[k][2])]))}
 else{o=[['日付','入眠','起床','睡眠時間h','中途覚醒','寝起き気分','入浴','夕食','残業h','1日の気分','食欲','頭痛最大','眠気最大','運動分','昼寝分','体温','気温0時','気温6時','気温12時','気温18時','気圧0時','気圧6時','気圧12時','気圧18時','気圧最高','気圧最低','天気12時','随時記録','メモ']];
-rows().forEach(r=>{const x=mem.daily[r.d]||{},ev=evsOf(r.d),p=dayP(r.d),w=h=>hr(r.d,h);
+rows().forEach(r=>{const x=mem.daily[r.d]||{},ev=evsOf(r.d),p=dayP(r.d),w=h=>hrA(r.d,h);
 o.push([r.d,x.sleepAt,x.wakeAt,sleepH(x)?.toFixed(2),x.awake==='1'?'あり':x.awake==='0'?'なし':'',x.mood,x.bath,x.dinner,x.overtime,x.dayMood,x.appetite,r.head,r.sleepy,r.f['運動(分)'],r.f['昼寝(分)'],ev.filter(e=>e.type==='temp').map(e=>e.time+' '+e.val).join(' / '),...[0,6,12,18].map(h=>w(h)?.[0]),...[0,6,12,18].map(h=>w(h)?.[1]),p.length?Math.max(...p):'',p.length?Math.min(...p):'',w(12)?WC(w(12)[2]):'',ev.map(e=>e.time+' '+T[e.type].n+' '+desc(e)).join(' / '),x.memo])})}
 $('#csvbox').value=o.map(r=>r.map(q).join(',')).join('\n')}
 function bk(){const s=mem.settings,o=[['kind','f1','f2','f3','f4','f5','f6','f7','f8','f9','f10','f11'],['setting',s.city||'',s.lat??'',s.lon??'',(s.meds||[]).join('|'),'2',s.th3??'',s.th6??'']];
 Object.keys(mem.daily).sort().forEach(d=>{const x=mem.daily[d];o.push(['daily',d,x.sleepAt,x.wakeAt,x.awake,x.mood,x.bath,x.dinner,x.overtime,x.memo,x.dayMood,x.appetite])});
 mem.events.forEach(e=>o.push(['event',e.id,e.date,e.time,e.type,e.level,e.dur,e.name,e.min,e.val]));
-Object.keys(mem.weather).sort().forEach(k=>o.push(['weather',k,...mem.weather[k]]));
+Object.keys(mem.weather).sort().filter(k=>!isFc(k)).forEach(k=>o.push(['weather',k,...mem.weather[k].slice(0,3)]));
 return o.map(r=>r.map(q).join(',')).join('\n')}
 function dl(){const t=bk();$('#csvbox').value=t;try{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+t],{type:'text/csv'}));a.download='health-backup-'+today()+'.csv';document.body.appendChild(a);a.click();a.remove()}catch(e){}
 $('#bk_msg').textContent='保存を実行しました。保存されない場合は、下のCSV枠の内容をコピーしてメモ等に貼り付けてください'}
